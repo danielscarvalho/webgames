@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#111827">
+    <title>Web Games — Tiny Arcade</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="games.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#" aria-label="Web Games home">
+        <span class="brand-mark" aria-hidden="true">W</span>
+        <span>web<span class="brand-accent">games</span></span>
+      </a>
+      <p>Little games. Big breaks.</p>
+    </header>
+
+    <main>
+      <section class="intro" aria-labelledby="page-title">
+        <p class="eyebrow">A tiny browser arcade</p>
+        <h1 id="page-title">Pick a game. Take a break.</h1>
+        <p>Two quick experiments, made for your browser. No downloads, no fuss.</p>
+      </section>
+
+      <section class="games" aria-label="Games">
+        <article class="game-card">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">01 · Reflex</p>
+              <h2>Star Catch</h2>
+            </div>
+            <span class="game-icon" aria-hidden="true">✦</span>
+          </div>
+          <p class="game-description">Catch as many stars as you can before the timer runs out.</p>
+          <div class="scoreboard" aria-label="Game stats">
+            <div><span class="stat-label">Score</span><strong id="catch-score">0</strong></div>
+            <div><span class="stat-label">Time</span><strong><span id="catch-time">20</span>s</strong></div>
+          </div>
+          <div class="catch-arena" id="catch-arena" aria-label="Star Catch play area">
+            <button class="star-target" id="star-target" type="button" aria-label="Catch the star" hidden>✦</button>
+            <p class="arena-hint" id="catch-hint">Ready when you are.</p>
+          </div>
+          <p class="game-status" id="catch-status" aria-live="polite">Press start to play.</p>
+          <button class="primary-button" id="catch-start" type="button">Start game</button>
+        </article>
+
+        <article class="game-card">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">02 · Memory</p>
+              <h2>Light Sequence</h2>
+            </div>
+            <span class="game-icon memory-icon" aria-hidden="true">▦</span>
+          </div>
+          <p class="game-description">Watch the pattern, then repeat it. How many lights can you remember?</p>
+          <div class="scoreboard" aria-label="Game stats">
+            <div><span class="stat-label">Round</span><strong id="memory-round">—</strong></div>
+            <div><span class="stat-label">Best</span><strong id="memory-best">0</strong></div>
+          </div>
+          <div class="memory-grid" id="memory-grid" role="group" aria-label="Memory game lights">
+            <button type="button" class="memory-cell" data-cell="0" aria-label="Light 1" disabled></button>
+            <button type="button" class="memory-cell" data-cell="1" aria-label="Light 2" disabled></button>
+            <button type="button" class="memory-cell" data-cell="2" aria-label="Light 3" disabled></button>
+            <button type="button" class="memory-cell" data-cell="3" aria-label="Light 4" disabled></button>
+            <button type="button" class="memory-cell" data-cell="4" aria-label="Light 5" disabled></button>
+            <button type="button" class="memory-cell" data-cell="5" aria-label="Light 6" disabled></button>
+            <button type="button" class="memory-cell" data-cell="6" aria-label="Light 7" disabled></button>
+            <button type="button" class="memory-cell" data-cell="7" aria-label="Light 8" disabled></button>
+            <button type="button" class="memory-cell" data-cell="8" aria-label="Light 9" disabled></button>
+          </div>
+          <p class="game-status" id="memory-status" aria-live="polite">Press start to play.</p>
+          <button class="primary-button" id="memory-start" type="button">Start game</button>
+        </article>
+      </section>
+    </main>
+
+    <footer>Made for the joy of playing around with the web.</footer>
+  </body>
+</html>
