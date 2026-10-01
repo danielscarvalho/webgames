@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cat and Dog</title>
+<style>
+  :root {
+    --bg: #eef5e9;
+    --panel: #ffffff;
+    --ink: #23312a;
+    --muted: #5d6b63;
+    --border: #d5e0d7;
+    --track: #e3ebe5;
+    --hot: #d9452b;
+    --cool: #2f8f5b;
+    --btn: #2f7d4f;
+    --btn-ink: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121814;
+      --panel: #1c241f;
+      --ink: #e6efe9;
+      --muted: #9fb0a6;
+      --border: #2e3a33;
+      --track: #2a352f;
+      --btn: #3f9d66;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    display: flex;
+    justify-content: center;
+    padding: 16px;
+  }
+  main { width: 100%; max-width: 900px; }
+  h1 { margin: 0 0 4px; font-size: clamp(1.4rem, 3.2vw, 2rem); }
+  .lead { margin: 0 0 12px; color: var(--muted); font-size: .95rem; }
+  .yard-wrap {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 6px 20px rgba(0,0,0,.08);
+  }
+  /* The SVG scales with the page width; viewBox keeps 900×600 yard units. */
+  #yard {
+    display: block;
+    width: 100%;
+    height: auto;
+    touch-action: none;          /* let pointer events handle touch drags */
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .animal { cursor: grab; outline: none; }
+  .animal.dragging { cursor: grabbing; }
+  .focus-ring { opacity: 0; transition: opacity .15s; }
+  .animal:focus-visible .focus-ring { opacity: 1; }
+  .no-hit { pointer-events: none; }
+  .balloon text, .zzz text, #distLabel text {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-weight: 800;
+  }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-top: 12px;
+  }
+  #mute {
+    font: inherit;
+    font-weight: 600;
+    padding: 10px 16px;
+    border-radius: 10px;
+    border: 0;
+    background: var(--btn);
+    color: var(--btn-ink);
+    cursor: pointer;
+    min-width: 132px;
+  }
+  #mute[aria-pressed="true"] { background: #7a847e; }
+  #mute:focus-visible { outline: 3px solid #2f7dd1; outline-offset: 2px; }
+
+  .meter {
+    flex: 1 1 280px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 12px;
+  }
+  .meter-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: .9rem;
+    margin-bottom: 6px;
+  }
+  .meter-head strong { font-variant-numeric: tabular-nums; }
+  .track {
+    position: relative;
+    height: 14px;
+    background: var(--track);
+    border-radius: 7px;
+    overflow: hidden;
+  }
+  .fill {
+    height: 100%;
+    width: 0;
+    background: var(--cool);
+    border-radius: 7px;
+    transition: background-color .2s;
+  }
+  .fill.hot { background: var(--hot); }
+  .threshold {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: var(--ink);
+    opacity: .6;
+  }
+  .scale {
+    display: flex;
+    justify-content: space-between;
+    font-size: .75rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .ham-readout {
+    margin-top: 6px;
+    font-size: .85rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .ham-readout strong { color: var(--ink); }
+  .hint { font-size: .85rem; color: var(--muted); margin: 10px 0 0; }
+  .hint[hidden] { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Cat and Dog</h1>
+  <p class="lead">Drag the dog and the cat with a mouse or finger (or focus one with Tab and use the arrow keys). Bring them within 200&nbsp;px and see what happens. The hamster can't be grabbed: it always keeps exactly the same distance from both of them.</p>
+
+  <div class="yard-wrap">
+    <svg id="yard" viewBox="0 0 900 600" role="img" aria-labelledby="yardTitle">
+      <title id="yardTitle">A backyard with a draggable dog and cat</title>
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#a9dcff"/>
+          <stop offset="1" stop-color="#e6f6ff"/>
+        </linearGradient>
+        <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#8fd16f"/>
+          <stop offset="1" stop-color="#5aa645"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Static scenery; pickets, grass tufts and flowers are added by JS -->
+      <g id="decor" class="no-hit">
+        <rect width="900" height="150" fill="url(#sky)"/>
+        <circle cx="830" cy="42" r="28" fill="#ffd54a"/>
+        <g fill="#ffffff" opacity=".9">
+          <ellipse cx="140" cy="38" rx="42" ry="14"/>
+          <ellipse cx="170" cy="30" rx="28" ry="14"/>
+          <ellipse cx="520" cy="30" rx="36" ry="12"/>
+          <ellipse cx="545" cy="24" rx="22" ry="11"/>
+        </g>
+        <rect y="140" width="900" height="460" fill="url(#grass)"/>
+        <g id="fence"></g>
+        <g id="plants"></g>
+      </g>
+
+      <!-- Range circle (200 px around the dog) and the distance line -->
+      <g id="rangeLayer" class="no-hit">
+        <circle id="rangeCircle" r="200" fill="rgba(255,255,255,.10)" stroke="#ffffff" stroke-opacity=".7" stroke-width="2" stroke-dasharray="8 8"/>
+        <line id="distLine" stroke="#ffffff" stroke-width="3" stroke-dasharray="4 8" stroke-linecap="round"/>
+        <g id="distLabel">
+          <rect x="-38" y="-14" width="76" height="28" rx="14" fill="rgba(0,0,0,.45)"/>
+          <text id="distLabelText" text-anchor="middle" dominant-baseline="central" font-size="15" fill="#ffffff">0 px</text>
+        </g>
+        <!-- Hamster guide: the perpendicular bisector (all points equally far from dog and cat) and the two equal radii -->
+        <line id="bisector" stroke="#ffe08a" stroke-width="2" stroke-dasharray="2 10" stroke-linecap="round" opacity=".8"/>
+        <line id="hamToDog" stroke="#ffb347" stroke-width="2" stroke-dasharray="6 6" opacity=".9"/>
+        <line id="hamToCat" stroke="#ffb347" stroke-width="2" stroke-dasharray="6 6" opacity=".9"/>
+      </g>
+
+      <!-- ============ HAMSTER (drawn facing right). Not interactive: pointer-events none, not focusable. ============ -->
+      <g id="hamsterLayer" class="no-hit" aria-hidden="true">
+        <g id="hamster">
+          <g id="hamsterBody">
+            <g class="flip">
+              <ellipse cx="0" cy="22" rx="30" ry="5" fill="rgba(0,0,0,.18)"/>
+              <ellipse id="hamFootBack"  cx="-14" cy="18" rx="7" ry="4" fill="#f4b6a6"/>
+              <ellipse id="hamFootFront" cx="14"  cy="18" rx="7" ry="4" fill="#f4b6a6"/>
+              <circle cx="-29" cy="4" r="4" fill="#e8a55a"/>
+              <ellipse cx="0" cy="0" rx="30" ry="21" fill="#e8a55a"/>
+              <ellipse cx="4" cy="7" rx="20" ry="12" fill="#fbe3c4"/>
+              <circle cx="10" cy="-19" r="7" fill="#e8a55a"/>
+              <circle cx="10" cy="-19" r="4" fill="#f4b6a6"/>
+              <circle cx="-4" cy="-19" r="6" fill="#d58f45"/>
+              <ellipse cx="22" cy="2" rx="8" ry="7" fill="#fbe3c4"/>
+              <circle cx="18" cy="-7" r="3.4" fill="#1d1510"/>
+              <circle cx="19" cy="-8.2" r="1.1" fill="#ffffff"/>
+              <circle cx="29" cy="-2" r="2.6" fill="#f07c91"/>
+              <path d="M26,3 L38,0 M26,5 L38,7" stroke="#8a6a4a" stroke-width="1" stroke-linecap="round"/>
+            </g>
+          </g>
+        </g>
+      </g>
+
+      <!-- Animals. Each outer <g> is positioned by JS (translate); the inner .flip <g> turns it to face the other animal. -->
+      <g id="animals">
+        <!-- ============ DOG (drawn facing right) ============ -->
+        <g id="dog" class="animal" tabindex="0" role="button" aria-label="Dog. Drag, or use arrow keys, to move.">
+          <g class="flip">
+            <ellipse cx="0" cy="52" rx="62" ry="8" fill="rgba(0,0,0,.18)"/>
+            <g id="dogTail">
+              <path d="M-48,-8 Q-72,-20 -76,-46" stroke="#a8683a" stroke-width="11" fill="none" stroke-linecap="round"/>
+            </g>
+            <rect x="-40" y="10" width="13" height="38" rx="6" fill="#a8683a"/>
+            <rect x="-22" y="10" width="13" height="38" rx="6" fill="#b87843"/>
+            <rect x="16"  y="10" width="13" height="38" rx="6" fill="#a8683a"/>
+            <rect x="32"  y="10" width="13" height="38" rx="6" fill="#b87843"/>
+            <ellipse cx="0" cy="0" rx="52" ry="30" fill="#c98b4f"/>
+            <ellipse cx="-18" cy="-8" rx="16" ry="11" fill="#9c6232"/>
+            <path d="M30,-24 Q38,-4 32,18" stroke="#e24a3b" stroke-width="8" fill="none" stroke-linecap="round"/>
+            <circle cx="36" cy="10" r="4.5" fill="#ffd54a"/>
+            <circle cx="52" cy="-26" r="27" fill="#c98b4f"/>
+            <ellipse cx="36" cy="-34" rx="10" ry="20" fill="#8a5428" transform="rotate(20 36 -34)"/>
+            <ellipse cx="74" cy="-18" rx="16" ry="12" fill="#f0cfa4"/>
+            <ellipse cx="87" cy="-22" rx="6" ry="5" fill="#2b1d14"/>
+            <g class="eyes-open">
+              <circle cx="58" cy="-34" r="4.5" fill="#2b1d14"/>
+              <circle cx="59.5" cy="-35.5" r="1.5" fill="#ffffff"/>
+            </g>
+            <path class="eyes-closed" d="M53,-33 q5,4 10,0" stroke="#2b1d14" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path class="mouth-closed" d="M68,-8 q7,5 14,0" stroke="#2b1d14" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <g class="mouth-open">
+              <ellipse cx="76" cy="-5" rx="9" ry="7" fill="#6b1d1d"/>
+              <ellipse cx="76" cy="-1" rx="5" ry="3.5" fill="#ff7a8a"/>
+            </g>
+            <ellipse class="focus-ring" cx="6" cy="-4" rx="100" ry="68" fill="none" stroke="#2f7dd1" stroke-width="3" stroke-dasharray="6 6"/>
+          </g>
+        </g>
+
+        <!-- ============ CAT (drawn facing left) ============ -->
+        <g id="cat" class="animal" tabindex="0" role="button" aria-label="Cat. Drag, or use arrow keys, to move.">
+          <g class="flip">
+            <ellipse cx="0" cy="52" rx="52" ry="7" fill="rgba(0,0,0,.18)"/>
+            <rect class="cat-leg" x="-34" width="10" rx="5" fill="#7f889b"/>
+            <rect class="cat-leg" x="-20" width="10" rx="5" fill="#8a93a6"/>
+            <rect class="cat-leg" x="12"  width="10" rx="5" fill="#7f889b"/>
+            <rect class="cat-leg" x="26"  width="10" rx="5" fill="#8a93a6"/>
+            <!-- Everything above the legs is lifted when the cat arches -->
+            <g id="catLift">
+              <path id="catTail" stroke="#8a93a6" fill="none" stroke-linecap="round"/>
+              <path id="catBody" fill="#9aa3b5"/>
+              <path d="M-6,-2 q4,10 0,20 M8,-4 q4,10 0,22" stroke="#7f889b" stroke-width="4" fill="none" stroke-linecap="round"/>
+              <polygon points="-64,-38 -60,-66 -46,-48" fill="#9aa3b5"/>
+              <polygon points="-42,-50 -28,-66 -24,-38" fill="#9aa3b5"/>
+              <polygon points="-60,-44 -58,-59 -50,-49" fill="#f4a6b8"/>
+              <polygon points="-38,-49 -30,-59 -28,-44" fill="#f4a6b8"/>
+              <circle cx="-44" cy="-28" r="23" fill="#9aa3b5"/>
+              <g class="eyes-open">
+                <ellipse cx="-52" cy="-31" rx="4" ry="5.5" fill="#56b34f"/>
+                <ellipse cx="-36" cy="-31" rx="4" ry="5.5" fill="#56b34f"/>
+                <ellipse cx="-52" cy="-31" rx="1.6" ry="4.2" fill="#1b1b1b"/>
+                <ellipse cx="-36" cy="-31" rx="1.6" ry="4.2" fill="#1b1b1b"/>
+              </g>
+              <path class="eyes-closed" d="M-56,-30 q4,3 8,0 M-40,-30 q4,3 8,0" stroke="#2b2b35" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+              <polygon points="-47,-22 -41,-22 -44,-18" fill="#e87a93"/>
+              <path class="mouth-closed" d="M-44,-18 q-3,4 -6,1 M-44,-18 q3,4 6,1" stroke="#2b2b35" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+              <ellipse class="mouth-open" cx="-44" cy="-12" rx="4.5" ry="5.5" fill="#6b1d2d"/>
+              <path d="M-54,-19 L-74,-23 M-54,-17 L-74,-13 M-34,-19 L-16,-23 M-34,-17 L-16,-13" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round" opacity=".85"/>
+            </g>
+            <ellipse class="focus-ring" cx="0" cy="-16" rx="96" ry="78" fill="none" stroke="#2f7dd1" stroke-width="3" stroke-dasharray="6 6"/>
+          </g>
+        </g>
+      </g>
+
+      <!-- Speech balloons: the tail tip sits at (0,0) so scaling grows the balloon away from the speaker -->
+      <g id="balloons" class="no-hit">
+        <g id="dogBalloon" class="balloon" visibility="hidden">
+          <path d="M-44,-84 H44 A18,18 0 0 1 62,-66 V-48 A18,18 0 0 1 44,-30 H12 L0,0 L-10,-30 H-44 A18,18 0 0 1 -62,-48 V-66 A18,18 0 0 1 -44,-84 Z" fill="#fffdf5" stroke="#c9822f" stroke-width="3" stroke-linejoin="round"/>
+          <text x="0" y="-57" text-anchor="middle" dominant-baseline="central" font-size="26" fill="#8a4b12">Woof!</text>
+        </g>
+        <g id="catBalloon" class="balloon" visibility="hidden">
+          <path d="M-44,-84 H44 A18,18 0 0 1 62,-66 V-48 A18,18 0 0 1 44,-30 H12 L0,0 L-10,-30 H-44 A18,18 0 0 1 -62,-48 V-66 A18,18 0 0 1 -44,-84 Z" fill="#fbf7ff" stroke="#7d5bbf" stroke-width="3" stroke-linejoin="round"/>
+          <text x="0" y="-57" text-anchor="middle" dominant-baseline="central" font-size="26" fill="#4f2f8f">Meow!</text>
+        </g>
+      </g>
+
+      <!-- Floating "Zzz" shown while an animal naps (far apart and not being dragged) -->
+      <g id="zzzLayer" class="no-hit">
+        <g id="dogZzz" class="zzz" fill="#2c3e66"><text>Z</text><text>Z</text><text>Z</text></g>
+        <g id="catZzz" class="zzz" fill="#2c3e66"><text>Z</text><text>Z</text><text>Z</text></g>
+      </g>
+    </svg>
+  </div>
+
+  <div class="controls">
+    <button id="mute" type="button" aria-pressed="false">🔊 Sound on</button>
+    <div class="meter" id="meter" role="meter" aria-label="Distance between the dog and the cat" aria-valuemin="0" aria-valuemax="1082" aria-valuenow="0">
+      <div class="meter-head">
+        <span>Distance: <strong id="distValue">0 px</strong></span>
+        <span id="status">—</span>
+      </div>
+      <div class="track">
+        <div class="fill" id="meterFill"></div>
+        <div class="threshold" id="meterThreshold" title="200 px reaction range"></div>
+      </div>
+      <div class="scale"><span>0</span><span>200 px range ▲</span><span>1082 px</span></div>
+      <div class="ham-readout" id="hamReadout">🐹 Hamster → dog <strong id="hamDog">0 px</strong> · → cat <strong id="hamCat">0 px</strong></div>
+    </div>
+  </div>
+  <p class="hint" id="hint">🔈 Browsers only allow sound after your first tap, click or key press. Press <kbd>M</kbd> to mute.</p>
+</main>
+
+<script>
+"use strict";
+/**
+ * Cat and Dog — a small proximity toy.
+ *
+ * Coordinates: everything is measured in SVG user units of the 900 × 600 viewBox,
+ * which is what the distance meter calls "px". The SVG itself is responsive, so
+ * screen pointer positions are converted into yard units with getScreenCTM().
+ *
+ * Main pieces:
+ *   1. Animal model      – position, collision bounds and facing of each animal.
+ *   2. Dragging          – pointer events (mouse, touch, pen) with pointer capture,
+ *                          plus arrow-key movement for keyboard users.
+ *   3. Sound             – barks and meows synthesised with the Web Audio API.
+ *   4. Animation loop    – one requestAnimationFrame loop computes the distance and
+ *                          drives wagging, arching, balloons, "Zzz" and the meter.
+ *   5. Hamster           – an autonomous, non-clickable hamster that always stands on
+ *                          the perpendicular bisector of the dog–cat segment, i.e. at
+ *                          the same distance from both animals.
+ */
+
+/* -------------------------------------------------------------------------- */
+/* Constants and tiny helpers                                                  */
+/* -------------------------------------------------------------------------- */
+
+/** Yard size in SVG units; animals' feet must stay below the fence line (groundTop). */
+const YARD = { w: 900, h: 600, groundTop: 150 };
+/** Distance (yard px) under which the animals react to each other. */
+const RANGE = 200;
+/** Largest possible distance in the yard (its diagonal), used to scale the meter. */
+const MAX_DIST = Math.hypot(YARD.w, YARD.h);
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+const $ = (id) => document.getElementById(id);
+const svg = $("yard");
+
+/** Clamp v into the interval [lo, hi]. */
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+/** Linear interpolation between a and b by t ∈ [0,1]. */
+const lerp = (a, b, t) => a + (b - a) * t;
+/**
+ * Frame-rate independent easing: move `current` toward `target`.
+ * @param {number} rate  larger = faster (roughly 1/seconds)
+ * @param {number} dt    elapsed seconds since last frame
+ */
+const approach = (current, target, rate, dt) => current + (target - current) * (1 - Math.exp(-rate * dt));
+
+/** Create an SVG element with attributes and optionally append it to a parent. */
+function svgEl(tag, attrs, parent) {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const k in attrs) node.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(node);
+  return node;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Scenery (generated once so the markup stays short)                          */
+/* -------------------------------------------------------------------------- */
+
+/** Draw the picket fence plus deterministic grass tufts and flowers. */
+function buildScenery() {
+  const fence = $("fence");
+  svgEl("rect", { x: 0, y: 84, width: 900, height: 10, fill: "#e3cfa8" }, fence);
+  svgEl("rect", { x: 0, y: 122, width: 900, height: 10, fill: "#e3cfa8" }, fence);
+  for (let x = 2; x < 900; x += 30) {
+    svgEl("polygon", {
+      points: `${x},70 ${x + 11},57 ${x + 22},70 ${x + 22},150 ${x},150`,
+      fill: "#f6e7c9", stroke: "#d6bf94", "stroke-width": 1.5
+    }, fence);
+  }
+
+  // Tiny seeded pseudo-random generator so the yard looks the same on every load.
+  let seed = 7;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+  const plants = $("plants");
+  for (let i = 0; i < 40; i++) {
+    const x = 10 + rand() * 880, y = 170 + rand() * 420;
+    svgEl("path", {
+      d: `M${x},${y} l-4,-10 M${x},${y} l0,-13 M${x},${y} l4,-10`,
+      stroke: "#4c9a3b", "stroke-width": 2, "stroke-linecap": "round", fill: "none"
+    }, plants);
+  }
+  const colors = ["#ff6f91", "#ffc75f", "#ffffff", "#c490ff", "#ff9671"];
+  for (let i = 0; i < 18; i++) {
+    const x = 20 + rand() * 860, y = 180 + rand() * 400;
+    const g = svgEl("g", { transform: `translate(${x.toFixed(1)},${y.toFixed(1)})` }, plants);
+    const c = colors[i % colors.length];
+    for (let p = 0; p < 5; p++) {
+      const a = (p / 5) * Math.PI * 2;
+      svgEl("circle", { cx: (Math.cos(a) * 5).toFixed(2), cy: (Math.sin(a) * 5).toFixed(2), r: 4, fill: c }, g);
+    }
+    svgEl("circle", { cx: 0, cy: 0, r: 3, fill: "#f2b705" }, g);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* 1. Animal model                                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @typedef {Object} Animal
+ * @property {SVGGElement} el     outer group, translated to (x, y)
+ * @property {SVGGElement} flip   inner group, mirrored with scale(±1, 1)
+ * @property {number} x, y        centre position in yard units
+ * @property {{hw:number, top:number, bottom:number}} bounds
+ *           half-width and vertical extents relative to (x, y); used for clamping
+ * @property {number} headX       head x offset in the animal's own drawing
+ * @property {number} headTop     y offset of the top of the head (balloon anchor)
+ * @property {number} scale       current mirror factor (+1 or -1)
+ * @property {?{id:number, ox:number, oy:number}} drag  active drag, or null
+ */
+
+/** @type {{dog: Animal, cat: Animal}} */
+const animals = {
+  dog: {
+    el: $("dog"), flip: $("dog").querySelector(".flip"),
+    x: 220, y: 430,
+    bounds: { hw: 96, top: -62, bottom: 58 },
+    headX: 52, headTop: -60,
+    scale: 1, drag: null
+  },
+  cat: {
+    el: $("cat"), flip: $("cat").querySelector(".flip"),
+    x: 680, y: 410,
+    bounds: { hw: 82, top: -92, bottom: 58 },
+    headX: -44, headTop: -70,
+    scale: 1, drag: null
+  }
+};
+
+/**
+ * Move an animal, keeping its whole drawing inside the yard and its feet
+ * on the grass (below the fence).
+ */
+function moveTo(a, x, y) {
+  const b = a.bounds;
+  a.x = clamp(x, b.hw, YARD.w - b.hw);
+  a.y = clamp(y, Math.max(-b.top, YARD.groundTop - b.bottom), YARD.h - b.bottom);
+}
+
+/** Write an animal's position and facing into its SVG transforms. */
+function renderAnimal(a) {
+  a.el.setAttribute("transform", `translate(${a.x.toFixed(1)},${a.y.toFixed(1)})`);
+  a.flip.setAttribute("transform", `scale(${a.scale},1)`);
+}
+
+/** Show either the open or the closed version of a face part (eyes, mouth). */
+function setPart(a, openSelector, closedSelector, open) {
+  a.el.querySelectorAll(openSelector).forEach((n) => n.setAttribute("display", open ? "inline" : "none"));
+  a.el.querySelectorAll(closedSelector).forEach((n) => n.setAttribute("display", open ? "none" : "inline"));
+}
+
+/* -------------------------------------------------------------------------- */
+/* 2. Dragging (pointer events) and keyboard movement                          */
+/* -------------------------------------------------------------------------- */
+
+/** Convert a pointer event's screen position to yard (viewBox) coordinates. */
+function toYard(evt) {
+  const pt = new DOMPoint(evt.clientX, evt.clientY);
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+
+/**
+ * Make an animal draggable with mouse, touch or pen.
+ * Pointer capture keeps the drag going even if the pointer leaves the animal.
+ */
+function makeDraggable(a) {
+  a.el.addEventListener("pointerdown", (e) => {
+    if (e.button !== undefined && e.button > 0) return;   // primary button only
+    e.preventDefault();
+    ensureAudio();                                         // user gesture unlocks audio
+    const p = toYard(e);
+    a.drag = { id: e.pointerId, ox: p.x - a.x, oy: p.y - a.y };
+    $("animals").appendChild(a.el);                        // bring to front
+    a.el.setPointerCapture(e.pointerId);
+    a.el.classList.add("dragging");
+    a.el.focus({ preventScroll: true });
+  });
+
+  a.el.addEventListener("pointermove", (e) => {
+    if (!a.drag || e.pointerId !== a.drag.id) return;
+    const p = toYard(e);
+    moveTo(a, p.x - a.drag.ox, p.y - a.drag.oy);
+  });
+
+  const endDrag = (e) => {
+    if (!a.drag || e.pointerId !== a.drag.id) return;
+    a.drag = null;
+    a.el.classList.remove("dragging");
+  };
+  a.el.addEventListener("pointerup", endDrag);
+  a.el.addEventListener("pointercancel", endDrag);
+  a.el.addEventListener("lostpointercapture", endDrag);
+
+  // Keyboard: arrows move 15 px, Shift+arrows move 45 px.
+  a.el.addEventListener("keydown", (e) => {
+    const step = e.shiftKey ? 45 : 15;
+    const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+    const m = moves[e.key];
+    if (!m) return;
+    e.preventDefault();
+    ensureAudio();
+    moveTo(a, a.x + m[0], a.y + m[1]);
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* 3. Sound (Web Audio API)                                                    */
+/* -------------------------------------------------------------------------- */
+
+/** Audio graph: every voice → master gain (mute) → compressor → speakers. */
+let audioCtx = null;
+let master = null;
+let noiseBuffer = null;
+let muted = false;
+
+/**
+ * Create (or resume) the AudioContext. Browsers only allow this after a user
+ * gesture, so it is called from pointerdown, keydown and the mute button.
+ * @returns {?AudioContext}
+ */
+function ensureAudio() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  if (!audioCtx) {
+    audioCtx = new AC();
+    master = audioCtx.createGain();
+    master.gain.value = muted ? 0 : 1;
+    const comp = audioCtx.createDynamicsCompressor();   // avoids clipping when sounds overlap
+    master.connect(comp).connect(audioCtx.destination);
+
+    // 0.3 s of white noise, reused for the rough "breath" part of each bark.
+    noiseBuffer = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate * 0.3), audioCtx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  }
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  $("hint").hidden = true;
+  return audioCtx;
+}
+
+/**
+ * Synthesise one "woof": a sawtooth whose pitch drops quickly through a
+ * closing low-pass filter, layered with a short band-passed noise burst.
+ * @param {number} vol  peak gain (0–1), larger when the animals are closer
+ * @param {number} t    start time in AudioContext seconds
+ */
+function playBark(vol, t) {
+  const ctx = audioCtx;
+
+  const osc = ctx.createOscillator();
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(430, t);
+  osc.frequency.exponentialRampToValueAtTime(150, t + 0.16);
+
+  const lp = ctx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.Q.value = 5;
+  lp.frequency.setValueAtTime(1900, t);
+  lp.frequency.exponentialRampToValueAtTime(450, t + 0.18);
+
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.21);
+
+  osc.connect(lp).connect(g).connect(master);
+  osc.start(t);
+  osc.stop(t + 0.23);
+
+  const noise = ctx.createBufferSource();
+  noise.buffer = noiseBuffer;
+  const bp = ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.value = 900;
+  bp.Q.value = 1.2;
+  const ng = ctx.createGain();
+  ng.gain.setValueAtTime(vol * 0.7, t);
+  ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+  noise.connect(bp).connect(ng).connect(master);
+  noise.start(t);
+  noise.stop(t + 0.15);
+}
+
+/**
+ * Synthesise one "meow": a sawtooth that glides up then down ("mi-aaow"),
+ * with a little vibrato, shaped by a moving band-pass "vowel" filter.
+ * @param {number} vol  peak gain (0–1)
+ * @param {number} t    start time in AudioContext seconds
+ */
+function playMeow(vol, t) {
+  const ctx = audioCtx;
+
+  const osc = ctx.createOscillator();
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(480, t);
+  osc.frequency.linearRampToValueAtTime(830, t + 0.18);
+  osc.frequency.linearRampToValueAtTime(560, t + 0.45);
+  osc.frequency.linearRampToValueAtTime(380, t + 0.66);
+
+  const vib = ctx.createOscillator();      // vibrato LFO
+  vib.frequency.value = 7;
+  const vibDepth = ctx.createGain();
+  vibDepth.gain.value = 14;
+  vib.connect(vibDepth).connect(osc.frequency);
+
+  const formant = ctx.createBiquadFilter();
+  formant.type = "bandpass";
+  formant.Q.value = 3;
+  formant.frequency.setValueAtTime(700, t);
+  formant.frequency.linearRampToValueAtTime(1600, t + 0.2);
+  formant.frequency.linearRampToValueAtTime(850, t + 0.66);
+
+  // The band-pass removes a lot of energy, so the envelope is boosted.
+  const peak = Math.min(1, vol * 2.4);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + 0.07);
+  g.gain.linearRampToValueAtTime(peak * 0.8, t + 0.45);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+
+  osc.connect(formant).connect(g).connect(master);
+  osc.start(t);
+  vib.start(t);
+  osc.stop(t + 0.72);
+  vib.stop(t + 0.72);
+}
+
+/** Toggle mute, update the button, and fade the master gain. */
+function toggleMute() {
+  ensureAudio();
+  muted = !muted;
+  const btn = $("mute");
+  btn.setAttribute("aria-pressed", String(muted));
+  btn.textContent = muted ? "🔇 Muted" : "🔊 Sound on";
+  if (master) master.gain.setTargetAtTime(muted ? 0 : 1, audioCtx.currentTime, 0.02);
+}
+
+/* -------------------------------------------------------------------------- */
+/* 4. Reactions and the animation loop                                         */
+/* -------------------------------------------------------------------------- */
+
+/** Smoothed animation state (eased every frame toward targets). */
+const state = {
+  arch: 0,            // cat arch 0 (relaxed) … 1 (fully arched)
+  tailBase: -40,      // dog tail resting angle (droops while asleep)
+  dogBalloon: 0,      // balloon scales (0 = hidden)
+  catBalloon: 0,
+  dogPulse: 0,        // short "pop" each time an animal speaks, decays to 0
+  catPulse: 0,
+  dogZzz: 1,          // Zzz opacity per animal
+  catZzz: 1,
+  dogMouthUntil: 0,   // timestamps (ms) until which mouths stay open
+  catMouthUntil: 0,
+  catSpeakAt: 0,      // when the cat's delayed meow should show visually
+  nextSoundAt: 0,     // next time (ms) the pair vocalises while close
+  lastTime: performance.now()
+};
+
+/**
+ * Both animals "speak": the dog barks (twice when very close) and the cat
+ * answers with a meow shortly after. Louder when closer.
+ * @param {number} c    closeness 0 (at 200 px) … 1 (touching)
+ * @param {number} now  current time in ms (performance.now)
+ */
+function vocalize(c, now) {
+  const doubleBark = c > 0.6;
+  const meowDelay = doubleBark ? 0.5 : 0.3;             // seconds
+
+  state.dogPulse = 1;
+  state.dogMouthUntil = now + (doubleBark ? 480 : 240);
+  state.catSpeakAt = now + meowDelay * 1000;
+
+  if (audioCtx && !muted && audioCtx.state === "running") {
+    const t = audioCtx.currentTime + 0.02;
+    const vol = 0.12 + 0.55 * c;                         // closer = louder
+    playBark(vol, t);
+    if (doubleBark) playBark(vol * 0.9, t + 0.25);
+    playMeow(vol * 0.85, t + meowDelay);
+  }
+}
+
+/**
+ * Position a speech balloon so its tail points at (ax, ay), scaled by s.
+ * Kept inside the yard; hidden when s is tiny.
+ */
+function placeBalloon(g, ax, ay, s) {
+  if (s < 0.03) { g.setAttribute("visibility", "hidden"); return; }
+  g.setAttribute("visibility", "visible");
+  const x = clamp(ax, 64 * s + 4, YARD.w - 64 * s - 4);
+  const y = Math.max(ay, 86 * s + 4);
+  g.setAttribute("transform", `translate(${x.toFixed(1)},${y.toFixed(1)}) scale(${s.toFixed(3)})`);
+}
+
+/** Animate three rising, growing "Z"s above a sleeping animal's head. */
+function placeZzz(g, ax, ay, opacity, now, dir) {
+  g.setAttribute("opacity", opacity.toFixed(2));
+  if (opacity < 0.02) return;
+  g.setAttribute("transform", `translate(${ax.toFixed(1)},${ay.toFixed(1)})`);
+  const texts = g.querySelectorAll("text");
+  texts.forEach((txt, i) => {
+    const phase = ((now / 1000) * 0.5 + i / texts.length) % 1;   // 0 → 1 then wraps
+    txt.setAttribute("x", (dir * (6 + phase * 26)).toFixed(1));
+    txt.setAttribute("y", (-phase * 55).toFixed(1));
+    txt.setAttribute("font-size", (12 + phase * 16).toFixed(1));
+    txt.setAttribute("opacity", (phase < 0.15 ? phase / 0.15 : 1 - (phase - 0.15) / 0.85).toFixed(2));
+  });
+}
+
+/** Update the HTML distance meter and the in-yard distance line/label. */
+function updateMeter(dog, cat, d, c) {
+  const close = d < RANGE;
+  $("distValue").textContent = `${Math.round(d)} px`;
+  $("status").textContent = close
+    ? `Excited ${Math.round(c * 100)}% — Woof & Meow!`
+    : "Zzz… both napping";
+  const fill = $("meterFill");
+  fill.style.width = `${Math.min(100, (d / MAX_DIST) * 100).toFixed(1)}%`;
+  fill.classList.toggle("hot", close);
+  $("meter").setAttribute("aria-valuenow", String(Math.round(d)));
+
+  const line = $("distLine");
+  line.setAttribute("x1", dog.x.toFixed(1)); line.setAttribute("y1", dog.y.toFixed(1));
+  line.setAttribute("x2", cat.x.toFixed(1)); line.setAttribute("y2", cat.y.toFixed(1));
+  line.setAttribute("stroke", close ? "#ff5a3c" : "#ffffff");
+
+  const ring = $("rangeCircle");
+  ring.setAttribute("cx", dog.x.toFixed(1));
+  ring.setAttribute("cy", dog.y.toFixed(1));
+  ring.setAttribute("stroke", close ? "#ff5a3c" : "#ffffff");
+
+  $("distLabel").setAttribute("transform", `translate(${((dog.x + cat.x) / 2).toFixed(1)},${((dog.y + cat.y) / 2).toFixed(1)})`);
+  $("distLabelText").textContent = `${Math.round(d)} px`;
+}
+
+/** Cat parts that change shape with the arch. */
+const catLegs = document.querySelectorAll("#cat .cat-leg");
+const catLift = $("catLift");
+const catBody = $("catBody");
+const catTail = $("catTail");
+const dogTail = $("dogTail");
+
+/**
+ * Redraw the cat's posture for arch amount a ∈ [0,1]:
+ * back curves up, body rises on longer legs, tail stands up and puffs out.
+ */
+function drawCatPosture(a) {
+  const lift = 8 * a;
+  catLift.setAttribute("transform", `translate(0,${(-lift).toFixed(2)})`);
+  catLegs.forEach((leg) => {
+    leg.setAttribute("y", (14 - lift).toFixed(2));
+    leg.setAttribute("height", (34 + lift).toFixed(2));
+  });
+  const backY = -15 - 42 * a;                      // Bézier control height of the back
+  catBody.setAttribute("d", `M-42,22 C-38,${backY.toFixed(1)} 38,${backY.toFixed(1)} 42,22 Z`);
+  const cx = lerp(74, 58, a), cy = lerp(6, -34, a);
+  const ex = lerp(70, 44, a), ey = lerp(-34, -74, a);
+  catTail.setAttribute("d", `M36,12 Q${cx.toFixed(1)},${cy.toFixed(1)} ${ex.toFixed(1)},${ey.toFixed(1)}`);
+  catTail.setAttribute("stroke-width", (8 + 8 * a).toFixed(1));
+}
+
+/**
+ * Main loop: measure the distance, then drive every reaction from the
+ * closeness value c = 1 − d/200 (0 when 200 px or more apart).
+ */
+function frame(now) {
+  const dt = Math.min(0.05, (now - state.lastTime) / 1000);
+  state.lastTime = now;
+
+  const { dog, cat } = animals;
+  const d = Math.hypot(cat.x - dog.x, cat.y - dog.y);
+  const close = d < RANGE;
+  const c = close ? 1 - d / RANGE : 0;
+
+  // Face each other: +1 when the cat is to the right of the dog.
+  const dir = cat.x >= dog.x ? 1 : -1;
+  dog.scale = dir;   // dog is drawn facing right
+  cat.scale = dir;   // cat is drawn facing left, so the same factor turns it toward the dog
+
+  // Periodic barking/meowing while close; faster when closer.
+  if (close) {
+    if (now >= state.nextSoundAt) {
+      vocalize(c, now);
+      state.nextSoundAt = now + (1500 - 900 * c);
+    }
+  } else {
+    state.nextSoundAt = 0;           // speak immediately on the next approach
+  }
+  if (state.catSpeakAt && now >= state.catSpeakAt) {
+    state.catPulse = 1;
+    state.catMouthUntil = now + 600;
+    state.catSpeakAt = 0;
+  }
+
+  // Awake if close or being carried; otherwise napping.
+  const dogAwake = close || !!dog.drag;
+  const catAwake = close || !!cat.drag;
+
+  // Dog: tail wags faster and wider when closer; droops while asleep.
+  state.tailBase = approach(state.tailBase, dogAwake ? 0 : -40, 6, dt);
+  const wagAmp = close ? 18 + 24 * c : (dog.drag ? 10 : 0);
+  const wagSpeed = close ? 12 + 14 * c : 6;
+  const tailAngle = state.tailBase + wagAmp * Math.sin((now / 1000) * wagSpeed);
+  dogTail.setAttribute("transform", `rotate(${tailAngle.toFixed(1)} -48 -8)`);
+
+  // Cat: arches more the closer the dog is.
+  state.arch = approach(state.arch, close ? 0.35 + 0.65 * c : 0, 8, dt);
+  drawCatPosture(state.arch);
+
+  // Faces: eyes and mouths.
+  setPart(dog, ".eyes-open", ".eyes-closed", dogAwake);
+  setPart(cat, ".eyes-open", ".eyes-closed", catAwake);
+  setPart(dog, ".mouth-open", ".mouth-closed", now < state.dogMouthUntil);
+  setPart(cat, ".mouth-open", ".mouth-closed", now < state.catMouthUntil);
+
+  // Balloons: bigger when closer, with a quick pop each time an animal speaks.
+  const target = close ? 0.7 + 0.7 * c : 0;
+  state.dogBalloon = approach(state.dogBalloon, target, 10, dt);
+  state.catBalloon = approach(state.catBalloon, target, 10, dt);
+  state.dogPulse *= Math.exp(-6 * dt);
+  state.catPulse *= Math.exp(-6 * dt);
+  const dogHeadX = dog.x + dog.headX * dir;
+  const catHeadX = cat.x + cat.headX * dir;
+  placeBalloon($("dogBalloon"), dogHeadX, dog.y + dog.headTop, state.dogBalloon * (1 + 0.2 * state.dogPulse));
+  placeBalloon($("catBalloon"), catHeadX, cat.y + cat.headTop - 16 * state.arch, state.catBalloon * (1 + 0.2 * state.catPulse));
+
+  // Zzz while napping.
+  state.dogZzz = approach(state.dogZzz, dogAwake ? 0 : 1, 6, dt);
+  state.catZzz = approach(state.catZzz, catAwake ? 0 : 1, 6, dt);
+  placeZzz($("dogZzz"), dogHeadX, dog.y + dog.headTop + 4, state.dogZzz, now, dir);
+  placeZzz($("catZzz"), catHeadX, cat.y + cat.headTop + 6, state.catZzz, now + 700, -dir);
+
+  renderAnimal(dog);
+  renderAnimal(cat);
+  updateMeter(dog, cat, d, c);
+
+  // Hamster: re-solved from the dog and cat positions every frame.
+  drawHamsterGuides(dog, cat, updateHamster(dog, cat, c, dt, now));
+
+  requestAnimationFrame(frame);
+}
+
+/* -------------------------------------------------------------------------- */
+/* 5. Hamster: always equidistant from the dog and the cat                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Geometry: the set of points at equal distance from D (dog) and C (cat) is the
+ * perpendicular bisector of segment DC. It passes through the midpoint
+ *     M = (D + C) / 2
+ * with unit direction n ⊥ (C − D). Any point H = M + s·n (s ∈ ℝ) satisfies
+ *     |H − D| = |H − C| = √((d/2)² + s²).
+ * The hamster therefore never stores a free (x, y); it stores only the signed
+ * offset s along the bisector, and its position is rebuilt from D and C every
+ * frame. This makes the equidistance exact, even while s is being eased.
+ *
+ * Behaviour: it prefers to stand HAMSTER_COMFORT px from each animal, i.e.
+ * at offset √(R² − (d/2)²). When the pair are more than 2R apart that is 0, so
+ * it sits at the midpoint. The offset is limited to the part of the bisector
+ * inside the yard (an interval that always contains 0, because the midpoint of
+ * two in-yard points is in the yard).
+ */
+const HAMSTER_COMFORT = 140;                           // preferred distance to each animal (px)
+const HAMSTER_AREA = { xMin: 40, xMax: 860, yMin: 92, yMax: 575 };
+
+const hamster = {
+  el: $("hamster"),
+  body: $("hamsterBody"),
+  flip: $("hamster").querySelector(".flip"),
+  footBack: $("hamFootBack"),
+  footFront: $("hamFootFront"),
+  s: 0,                 // signed offset along the bisector (eased)
+  side: 1,              // preferred side of the dog–cat line (+1 / −1)
+  n: { x: 0, y: -1 },   // current unit normal, kept orientation-consistent between frames
+  x: 450, y: 300,       // last computed position (for velocity / facing)
+  facing: 1,
+  step: 0               // running-cycle phase for the feet
+};
+
+/**
+ * For the line P(s) = M + s·n, return the interval [lo, hi] of s that keeps
+ * P inside the rectangle `area` (slab intersection, one axis at a time).
+ */
+function lineInterval(M, n, area) {
+  let lo = -Infinity, hi = Infinity;
+  const axes = [[M.x, n.x, area.xMin, area.xMax], [M.y, n.y, area.yMin, area.yMax]];
+  for (const [m, dir, min, max] of axes) {
+    if (Math.abs(dir) < 1e-9) continue;                // line parallel to this pair of edges
+    const a = (min - m) / dir, b = (max - m) / dir;
+    lo = Math.max(lo, Math.min(a, b));
+    hi = Math.min(hi, Math.max(a, b));
+  }
+  return { lo: Math.min(lo, 0), hi: Math.max(hi, 0) }; // 0 (the midpoint) is always allowed
+}
+
+/**
+ * Advance the hamster one frame.
+ * @param {Animal} dog
+ * @param {Animal} cat
+ * @param {number} c    dog–cat closeness (0 … 1), makes the hamster tremble
+ * @param {number} dt   seconds since last frame
+ * @param {number} now  ms timestamp
+ * @returns {{dDog:number, dCat:number, M:{x:number,y:number}, n:{x:number,y:number}}}
+ */
+function updateHamster(dog, cat, c, dt, now) {
+  const dx = cat.x - dog.x, dy = cat.y - dog.y;
+  const d = Math.hypot(dx, dy);
+  const M = { x: (dog.x + cat.x) / 2, y: (dog.y + cat.y) / 2 };
+
+  // Unit normal to DC. Keep the same orientation as last frame so the hamster
+  // does not jump across when the dog and cat swap places.
+  if (d > 1) {
+    let n = { x: -dy / d, y: dx / d };
+    if (n.x * hamster.n.x + n.y * hamster.n.y < 0) n = { x: -n.x, y: -n.y };
+    hamster.n = n;
+  }
+  const n = hamster.n;
+
+  // Desired offset: stand HAMSTER_COMFORT away from each (or at the midpoint if they are far apart).
+  const half = d / 2;
+  const want = Math.sqrt(Math.max(0, HAMSTER_COMFORT * HAMSTER_COMFORT - half * half));
+
+  // Room available on each side of the dog–cat line, inside the yard.
+  const { lo, hi } = lineInterval(M, n, HAMSTER_AREA);
+  const room = { "1": hi, "-1": -lo };
+  // Switch sides only if the current side is cramped and the other is roomier.
+  if (room[hamster.side] < want && room[-hamster.side] > room[hamster.side] + 10) hamster.side *= -1;
+
+  const target = clamp(hamster.side * want, lo, hi);
+  hamster.s = clamp(approach(hamster.s, target, 7, dt), lo, hi);
+
+  // Exact position on the bisector.
+  const x = M.x + n.x * hamster.s;
+  const y = M.y + n.y * hamster.s;
+
+  // Facing and running animation from the actual movement.
+  const vx = (x - hamster.x) / Math.max(dt, 1e-3);
+  const speed = Math.hypot(x - hamster.x, y - hamster.y) / Math.max(dt, 1e-3);
+  if (Math.abs(vx) > 15) hamster.facing = vx > 0 ? 1 : -1;
+  hamster.x = x; hamster.y = y;
+  hamster.step += dt * Math.min(30, speed / 6);
+  const legSwing = speed > 10 ? Math.sin(hamster.step) * 5 : 0;
+  hamster.footBack.setAttribute("cx", (-14 + legSwing).toFixed(1));
+  hamster.footFront.setAttribute("cx", (14 - legSwing).toFixed(1));
+
+  // Hop while running; tremble (small, fast jiggle) when the dog and cat are close.
+  const hop = speed > 10 ? -Math.abs(Math.sin(hamster.step)) * 4 : 0;
+  const shake = c > 0 ? Math.sin(now / 18) * (1 + 3 * c) : 0;
+  hamster.el.setAttribute("transform", `translate(${x.toFixed(1)},${y.toFixed(1)})`);
+  hamster.body.setAttribute("transform", `translate(${shake.toFixed(2)},${hop.toFixed(2)})`);
+  hamster.flip.setAttribute("transform", `scale(${hamster.facing},1)`);
+
+  return {
+    dDog: Math.hypot(x - dog.x, y - dog.y),
+    dCat: Math.hypot(x - cat.x, y - cat.y),
+    M, n
+  };
+}
+
+/** Draw the bisector and the two (equal) radii, and update the text readout. */
+function drawHamsterGuides(dog, cat, info) {
+  const { M, n } = info;
+  const L = 1200;                                      // long enough to cross the whole yard
+  const bis = $("bisector");
+  bis.setAttribute("x1", (M.x - n.x * L).toFixed(1)); bis.setAttribute("y1", (M.y - n.y * L).toFixed(1));
+  bis.setAttribute("x2", (M.x + n.x * L).toFixed(1)); bis.setAttribute("y2", (M.y + n.y * L).toFixed(1));
+
+  const toDog = $("hamToDog"), toCat = $("hamToCat");
+  toDog.setAttribute("x1", hamster.x.toFixed(1)); toDog.setAttribute("y1", hamster.y.toFixed(1));
+  toDog.setAttribute("x2", dog.x.toFixed(1));     toDog.setAttribute("y2", dog.y.toFixed(1));
+  toCat.setAttribute("x1", hamster.x.toFixed(1)); toCat.setAttribute("y1", hamster.y.toFixed(1));
+  toCat.setAttribute("x2", cat.x.toFixed(1));     toCat.setAttribute("y2", cat.y.toFixed(1));
+
+  $("hamDog").textContent = `${info.dDog.toFixed(1)} px`;
+  $("hamCat").textContent = `${info.dCat.toFixed(1)} px`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Start-up                                                                    */
+/* -------------------------------------------------------------------------- */
+
+function init() {
+  buildScenery();
+  $("meterThreshold").style.left = `${((RANGE / MAX_DIST) * 100).toFixed(2)}%`;
+  makeDraggable(animals.dog);
+  makeDraggable(animals.cat);
+  moveTo(animals.dog, animals.dog.x, animals.dog.y);
+  moveTo(animals.cat, animals.cat.x, animals.cat.y);
+
+  $("mute").addEventListener("click", toggleMute);
+  // "M" toggles mute from anywhere (except while typing in a form field).
+  document.addEventListener("keydown", (e) => {
+    if ((e.key === "m" || e.key === "M") && !e.ctrlKey && !e.metaKey && !e.altKey) toggleMute();
+  });
+  // Any tap in the yard also unlocks audio.
+  svg.addEventListener("pointerdown", ensureAudio);
+
+  requestAnimationFrame(frame);
+}
+
+init();
+</script>
+</body>
+</html>
